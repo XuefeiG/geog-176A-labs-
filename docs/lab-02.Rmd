@@ -17,9 +17,16 @@ covid = read.csv("data/covid.csv")
 
 ## Question 1 California Covid-19 Cases
 ```{r, message=FALSE, warning=FALSE}
-covid %>%
+CA-cases <- covid %>%
 filter(state == "California") %>%
 group_by(county, state) %>%
 mutate(dailycases = cases - lag(cases)) %>%
 ungroup()
+
+CA-cases %>%
+    filter(date == max(date)) %>%
+    group_by(county) %>%
+    summarize(TopCases = max(cases)) %>%
+    arrange(-TopCases) %>%
+    head(5)
 ```
