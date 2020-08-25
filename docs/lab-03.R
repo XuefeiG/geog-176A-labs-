@@ -103,7 +103,6 @@ FurthesttoC = DistoBCanada %>%
   select(city, state_name, dist_to_canada) %>%
   st_drop_geometry()
 
-
 knitr::kable(FurthesttoC,
              caption = "Furtherest Cities to Canada",
              col.names = c("City Name", "State", "Distance(km)"))
@@ -172,11 +171,12 @@ ggplot() +
   ggsave(file = "img/lab03plot3.png", height = 7 , width = 7 * aspect_ratio)
 
 # 3.4 - Equidistant boundary from Mexico and Canada
-Equidis  = UScities %>%
-  mutate(canada_to_mexico = abs(dist_to_mexico - dist_to_canada))
-  filter(canada_to_mexico <= 100)
+Equidis = UScities %>%
+  mutate(MCdis = abs(DistoBMexico$dist_to_mexico - DistoBCanada$dist_to_canada)) %>%
+  select(MCdis, city, state_name, population)
 
 LargeCities = Equidis %>%
+  filter(MCdis <= 100)  %>%
   slice_max(population, n = 5)
 
 ggplot() +
@@ -184,7 +184,7 @@ ggplot() +
   geom_sf(data = Border) +
   geom_sf(data = Equidis, col = "#f30100", size = 0.3) +
   geom_sf(data = LargeCities, col = "#50d0d0", size = 3) +
-  gghighlight::gghighlight(canada_to_mexico <= 100) +
+  gghighlight::gghighlight(MCdis <= 100) +
   ggthemes::theme_map() +
   labs(title = "5 Most Populous Cities Equal Distance from the Canadian AND Mexican border ± 100 km.",
        x = "Longitude",
@@ -223,8 +223,8 @@ knitr::kable(Zone, caption = "Quantifing Border Zone",
        col.names = c("Cities Number", "Population", "Percentage of Total"))
 
 # 4.2 - Mapping Border Zone
-ZoneCities = UScities %>%
-  filter(dist_to_border < 160)
+ZoneCities = DistoB %>%
+  filter(dist_to_border <= 160)
 
 PopCities = ZoneCities %>%
   slice_max(population, n = 10)
@@ -232,7 +232,7 @@ PopCities = ZoneCities %>%
 ggplot() +
   geom_sf(data = ZoneCities, aes(col = dist_to_border), size = 0.3) +
   geom_sf(data = PopCities, col = "#50d0d0") +
-  geom_sf(data = conus_string) +
+  geom_sf(data = Border) +
   scale_color_gradient(low = "orange", high = "darkred") +
   gghighlight(dist_to_border <= 160) +
   ggthemes::theme_map() +

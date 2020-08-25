@@ -4,7 +4,7 @@ author: "Xuefei Gao"
 date: "2020/8/24"
 output: html_document
 ---
-```{r}
+```{r, message=FALSE, warning=FALSE}
 library(tidyverse)
 library(sf)
 library(units)
@@ -37,7 +37,9 @@ UScities = readr::read_csv("data/uscities.csv") %>%
 USConus = st_transform(USConus, eqdc)
 Boundaries = st_transform(Boundaries, eqdc)
 UScities = st_transform(UScities, eqdc)
+```
 
+```{r, message=FALSE, warning=FALSE}
 # Question2
 # 2.1 - Distance to USA Border (coastline or national) (km)
 Border = st_union(USConus) %>%
@@ -110,11 +112,12 @@ FurthesttoC = DistoBCanada %>%
   select(city, state_name, dist_to_canada) %>%
   st_drop_geometry()
 
-
 knitr::kable(FurthesttoC,
              caption = "Furtherest Cities to Canada",
              col.names = c("City Name", "State", "Distance(km)"))
+```
 
+```{r, message=FALSE, warning=FALSE}
 # Question3
 # 3.1 - Data
 LargeUScities = UScities %>%
@@ -133,11 +136,9 @@ ggplot()+
     aes(label = city, geometry = geometry),
     stat = "sf_coordinates",
     size = 2.5)
-  aspect_ratio <- 1.5
-  ggsave(file = "img/lab03plot1.png", height = 7 , width = 7 * aspect_ratio)
 ```
-(img/lab03plot1.png)
-```{r}
+
+```{r, message=FALSE, warning=FALSE}
 # 3.2 - City Distance from the Border
 FurthesttoB3 = DistoB %>%
   slice_max(dist_to_border, n = 5) %>%
@@ -156,11 +157,9 @@ ggplot() +
     aes(label = city, geometry = geometry),
     stat = "sf_coordinates",
     size = 3)
-  aspect_ratio <- 1.5
-  ggsave(file = "img/lab03plot2.png", height = 7 , width = 7 * aspect_ratio)
 ```
-(img/lab03plot2.png)
-```{r}
+
+```{r, message=FALSE, warning=FALSE}
 # 3.3 - City Distance from Nearest State
 FurthesttoS3 = DistoB2 %>%
   slice_max(dist_to_state, n = 5) %>%
@@ -179,17 +178,16 @@ ggplot() +
     aes(label = city, geometry = geometry),
     stat = "sf_coordinates",
     size = 3)
-  aspect_ratio <- 1.5
-  ggsave(file = "img/lab03plot3.png", height = 7 , width = 7 * aspect_ratio)
 ```
-(img/lab03plot3.png)
 
+```{r, message=FALSE, warning=FALSE}
 # 3.4 - Equidistant boundary from Mexico and Canada
-Equidis  = UScities %>%
-  mutate(canada_to_mexico = abs(dist_to_mexico - dist_to_canada))
-  filter(canada_to_mexico <= 100)
-  
+Equidis = UScities %>%
+  mutate(MCdis = abs(DistoBMexico$dist_to_mexico - DistoBCanada$dist_to_canada)) %>%
+  select(MCdis, city, state_name, population)
+
 LargeCities = Equidis %>%
+  filter(MCdis <= 100)  %>%
   slice_max(population, n = 5)
 
 ggplot() +
@@ -197,7 +195,7 @@ ggplot() +
   geom_sf(data = Border) +
   geom_sf(data = Equidis, col = "#f30100", size = 0.3) +
   geom_sf(data = LargeCities, col = "#50d0d0", size = 3) +
-  gghighlight::gghighlight(canada_to_mexico <= 100) +
+  gghighlight::gghighlight(MCdis <= 100) +
   ggthemes::theme_map() +
   labs(title = "5 Most Populous Cities Equal Distance from the Canadian AND Mexican border ± 100 km.",
        x = "Longitude",
@@ -207,25 +205,23 @@ ggplot() +
     aes(label = city, geometry = geometry),
     stat = "sf_coordinates",
     size = 3)
-  aspect_ratio <- 1.5
-  ggsave(file = "img/lab03plot4.png", height = 7 , width = 7 * aspect_ratio)
 ```
-(img/lab03plot4.png)
-```{r}
-#Question 4 
-# 4.1 Quantifing Border Zone (Matches ACLU)
+
+```{r, message=FALSE, warning=FALSE}
+#Question 4
+# 4.1 - Quantifing Border Zone (Matches ACLU)
 Totalpop = DistoB %>%
     mutate(totalpop = sum(population)) %>%
     select(id, totalpop) %>%
     st_drop_geometry()
-  
+
 Dangerpop = DistoB %>%
     filter(dist_to_border <= 160) %>%
     mutate(dangerpop = sum(population)) %>%
     left_join(Totalpop, by = "id")
-  
+
 numbers = length(Dangerpop$city)
-  
+
 Zone = Dangerpop %>%
   mutate(number = numbers) %>%
   select(number, dangerpop, totalpop) %>%
@@ -236,10 +232,10 @@ Zone = Dangerpop %>%
 
 knitr::kable(Zone, caption = "Quantifing Border Zone",
        col.names = c("Cities Number", "Population", "Percentage of Total"))
-```
+
 # 4.2 - Mapping Border Zone
-ZoneCities = UScities %>%
-  filter(dist_to_border < 160)
+ZoneCities = DistoB %>%
+  filter(dist_to_border <= 160)
 
 PopCities = ZoneCities %>%
   slice_max(population, n = 10)
@@ -247,7 +243,7 @@ PopCities = ZoneCities %>%
 ggplot() +
   geom_sf(data = ZoneCities, aes(col = dist_to_border), size = 0.3) +
   geom_sf(data = PopCities, col = "#50d0d0") +
-  geom_sf(data = conus_string) +
+  geom_sf(data = Border) +
   scale_color_gradient(low = "orange", high = "darkred") +
   gghighlight(dist_to_border <= 160) +
   ggthemes::theme_map() +
@@ -257,7 +253,4 @@ ggplot() +
     aes(label = city, geometry = geometry),
     stat = "sf_coordinates",
     size = 3)
-  aspect_ratio <- 1.5
-  ggsave(file = "img/lab03plot5.png", height = 7 , width = 7 * aspect_ratio)
-
-(img/lab03plot5.png)
+```
