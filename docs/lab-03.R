@@ -172,17 +172,15 @@ ggplot() +
   ggsave(file = "img/lab03plot3.png", height = 7 , width = 7 * aspect_ratio)
 
 # 3.4 - Equidistant boundary from Mexico and Canada
-UScities = UScities %>%
+Equidis  = UScities %>%
   mutate(canada_to_mexico = abs(dist_to_mexico - dist_to_canada))
-
-Equidis = UScities
-filter(canada_to_mexico <= 100)
+  filter(canada_to_mexico <= 100)
 
 LargeCities = Equidis %>%
   slice_max(population, n = 5)
 
 ggplot() +
-  geom_sf(data = Boundaries) +
+  geom_sf(data = Boundaries, aes(), col = "#f30100", size = 0.3) +
   geom_sf(data = Border) +
   geom_sf(data = Equidis, col = "#f30100", size = 0.3) +
   geom_sf(data = LargeCities, col = "#50d0d0", size = 3) +
@@ -198,3 +196,51 @@ ggplot() +
     size = 3)
   aspect_ratio <- 1.5
   ggsave(file = "img/lab03plot4.png", height = 7 , width = 7 * aspect_ratio)
+
+#Question 4
+# 4.1 Quantifing Border Zone (Matches ACLU)
+Totalpop = DistoB %>%
+    mutate(totalpop = sum(population)) %>%
+    select(id, totalpop) %>%
+    st_drop_geometry()
+
+Dangerpop = DistoB %>%
+    filter(dist_to_border <= 160) %>%
+    mutate(dangerpop = sum(population)) %>%
+    left_join(Totalpop, by = "id")
+
+numbers = length(Dangerpop$city)
+
+Zone = Dangerpop %>%
+  mutate(number = numbers) %>%
+  select(number, dangerpop, totalpop) %>%
+  st_drop_geometry() %>%
+  mutate(percent = dangerpop / totalpop) %>%
+  select(number, dangerpop, percent) %>%
+  head(1)
+
+knitr::kable(Zone, caption = "Quantifing Border Zone",
+       col.names = c("Cities Number", "Population", "Percentage of Total"))
+
+# 4.2 - Mapping Border Zone
+ZoneCities = UScities %>%
+  filter(dist_to_border < 160)
+
+PopCities = ZoneCities %>%
+  slice_max(population, n = 10)
+
+ggplot() +
+  geom_sf(data = ZoneCities, aes(col = dist_to_border), size = 0.3) +
+  geom_sf(data = PopCities, col = "#50d0d0") +
+  geom_sf(data = conus_string) +
+  scale_color_gradient(low = "orange", high = "darkred") +
+  gghighlight(dist_to_border <= 160) +
+  ggthemes::theme_map() +
+  labs(title = paste("10 most populous cities in the Dange Zone")) +
+  ggrepel::geom_label_repel(
+    data = PopCities,
+    aes(label = city, geometry = geometry),
+    stat = "sf_coordinates",
+    size = 3)
+  aspect_ratio <- 1.5
+  ggsave(file = "img/lab03plot5.png", height = 7 , width = 7 * aspect_ratio)
