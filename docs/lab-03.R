@@ -198,7 +198,7 @@ ggplot() +
   ggsave(file = "img/lab03plot4.png", height = 7 , width = 7 * aspect_ratio)
 
 #Question 4
-# 4.1 Quantifing Border Zone (Matches ACLU)
+# 4.1 - Quantifing Border Zone (Matches ACLU)
 Totalpop = DistoB %>%
     mutate(totalpop = sum(population)) %>%
     select(id, totalpop) %>%
