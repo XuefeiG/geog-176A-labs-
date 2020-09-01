@@ -1,0 +1,233 @@
+---
+title: "Lab-04"
+author: "Xuefei Gao"
+date: "2020/8/31"
+output: html_document
+theme: sandstone
+---
+```{r }
+library(tidyverse)
+library(sf)
+library(USAboundariesData)
+library(USAboundaries)
+library(readxl)
+library(rmapshaper)
+library(gghighlight)
+library(knitr)
+library(leaflet)
+
+#Question1
+# Step 1.1  
+USconus = USAboundaries::us_counties() %>%
+  filter(!state_name %in% c("Puerto Rico", "Alaska", "Hawaii")) %>%
+  st_transform(5070)
+
+USconus_simp = ms_simplify(USconus, keep = 0.1)
+conusnpts = mapview::npts(USconus)
+simpnpts = mapview::npts(USconus_simp)
+
+# Step 1.2 
+county_centroid = st_centroid(USconus_simp) %>%
+  st_combine() %>%
+  st_cast("MULTIPOINT")
+
+# Step 1.3
+# Voroni
+voroni = st_voronoi(county_centroid) %>%
+  st_cast() %>%
+  st_as_sf %>%
+  mutate(id = 1:n())
+
+# Triangulated
+triangulated = st_triangulate(county_centroid) %>%
+  st_cast() %>%
+  st_as_sf() %>%
+  mutate(id = 1:n())
+
+# Gridded Coverage
+gridded = st_make_grid(USconus_simp, n = c(70, 50)) %>%
+  st_as_sf() %>%
+  st_cast() %>%
+  mutate(id = 1:n())
+
+# Hexagonal Coverage
+hexagonal = st_make_grid(USconus_simp, n = c(70, 50), square = FALSE) %>%
+  st_as_sf() %>%
+  st_cast() %>%
+  mutate(id = 1:n())
+
+# Step 1.6 
+plot = function(data, title){
+    ggplot() + 
+    geom_sf(data = data, fill = "white", col = "navy", size = .2) +   
+    theme_void() +
+    labs(title = title, caption = paste(nrow(data), "tiles" ))}
+
+# Original
+plot (data = USconus_simp, "Original")
+
+# Voroni
+voroni = st_intersection(voroni, st_union(USconus_simp))
+plot (voroni, "Voronoi Tessellatione") +
+geom_sf(data = county_centroid, col = "#50d0d0", size = 0.2)
+
+# Triangulated
+triangulated = st_intersection(triangulated, st_union(USconus_simp))
+plot (triangulated, "Triangulated Tessellation") +
+  geom_sf(data = county_centroid, col = "#50d0d0", size = 0.2)
+
+# Gridded Coverage
+plot (gridded, "Gridded Coverage")
+
+# Hexagonal Coverage
+plot (hexagonal, "Hexagonal Coverage")
+```
+
+```{r }
+#Question2
+# Step 2.1 
+sum_tess = function(data, title) {
+  area = st_area(data) %>% 
+  units::set_units("km^2") %>%
+  units::drop_units() 
+  
+  tibble(title, length(data), mean(area), sd(area), sum(area)) 
+}
+
+# Step 2.2-3
+tess_summary = bind_rows(
+  sum_tess(USconus_simp, "Original"),
+  sum_tess(voroni, "Voroni"),
+  sum_tess(triangulated, "Triangulated"),
+  sum_tess(gridded, "Gridded"),
+  sum_tess(hexagonal, "Hexagonal"))
+
+# Step 2.4
+knitr::kable(
+  tess_summary, 
+  caption = "2 tessellations, 2 coverages, and the raw counties", 
+  col.names = c("Type","Number","Mean Area (km^2)","Standard Deviation(km^2)","Total Area(km^2)"),
+  format.args = list(big.mark = ","))
+```
+```{r }
+# Step 2.5
+# Among the different types, we can see that Voroni is most similar to Original counties and they have the same number of files, same space of mean area and total area. The square grid and hexagon tessellations have standard deviation areas of zero and this is because all of the files of each type of maps are same. I think it is good to use Voroni or Triangulated type for regional research like state level analysis of population density while Gridded and Hexagonal coverages can serve for national research like average land occupation of people in the whole country.
+```
+
+```{r }
+#Question3
+# Step 3.1 
+dam = read_xlsx("data/NID2019_U.xlsx") %>% 
+  filter(!is.na(LONGITUDE), !is.na(LATITUDE)) %>%
+  st_as_sf(coords = c("LONGITUDE", "LATITUDE"), crs = 4326) %>%
+  st_transform(5070) %>%
+  st_filter(USconus_simp)
+
+# Step 3.2
+point_in_polygon = function(points, polygon, id){
+  st_join(polygon, points) %>%
+  st_drop_geometry() %>%
+  count(.data[[id]]) %>%
+  setNames(c(id, "n")) %>%
+  left_join(polygon, by = id) %>%
+  st_as_sf()
+}
+
+# Step 3.4
+plot2 = function(data, title){
+  ggplot() +
+  geom_sf(data = data, aes(fill = n), col = NA, alpha = .9, size = .2) +
+  scale_fill_viridis_c() +
+  theme_void() +
+  labs(title = title, caption = paste0(sum(data$n), " dams represented" )) +
+  theme(plot.title = element_text(hjust = .5, color =  "navy", face = "bold"))
+}
+
+# Step 3.3/3.5
+# Original
+point_in_polygon(dam, USconus_simp, "geoid") %>% 
+  plot2("Dams County")
+
+# Voroni
+point_in_polygon(dam, voroni, "id") %>% 
+  plot2("Dams Voroni")
+
+# Triangulated
+point_in_polygon(dam, triangulated, "id") %>% 
+  plot2("Dams Triangulated")
+
+# Gridded
+point_in_polygon(dam, gridded, "id") %>% 
+  plot2("Dams Gridded")
+
+# Hexagonal
+point_in_polygon(dam, hexagonal, "id") %>% 
+  plot2("Dams Hexagonal")
+```
+```{r }
+# Step 3.6
+# This relates to the MAUP problem because it shows a source of statistical bias can significantly impact the results of statistical hypothesis tests in point-based studies. I will use the voroni tessellation because I think it matches the original pattern best to be most accurate describing the waters.
+```
+```{r }
+# Question 4
+# Step 4.1
+Irrigation_dams = dam %>% #Choice 1
+  filter(grepl("I", PURPOSES))
+FloodControl_dams = dam %>% #Choice 2
+  filter(grepl("C", PURPOSES))
+WaterSupply_dams = dam %>% #Choice 3
+  filter(grepl("S", PURPOSES))
+FishandWildlife_dams = dam %>% #Choice 4
+  filter(grepl("F", PURPOSES))
+
+# Step 4.2
+# 1-Irrigation Dams
+point_in_polygon(Irrigation_dams, voroni, "id") %>% 
+  plot2("Irrigation Dams") +
+  gghighlight(n > (mean(n) + sd(n)))
+
+# 2-Flood Control Dams
+point_in_polygon(FloodControl_dams, voroni, "id") %>% 
+  plot2("Flood Control Dams") +
+  gghighlight(n > (mean(n) + sd(n)))
+
+# 3-Water Supply Dams
+point_in_polygon(WaterSupply_dams, voroni, "id") %>% 
+  plot2("Water Supply Dams") +
+  gghighlight(n > (mean(n) + sd(n)))
+
+# 4-Fish and Wildlife Dams
+point_in_polygon(FishandWildlife_dams, voroni, "id") %>% 
+  plot2("Fish and Wildlife Dams") +
+  gghighlight(n > (mean(n) + sd(n)))
+```
+```{r }
+#Step 4.3
+# I think the dams I choose and shown on the map really make senses. For example, the water supply dams are just near to the well-known water sources and coastal line. I do not think the tessellation I chose impact my findings a lot, but it really makes the findings easier and clearer.
+```
+```{r }
+# Extra Credit
+MSSP = read_sf("data/majorrivers_0_0") %>% 
+  filter(SYSTEM == "Mississippi") %>%
+  st_transform(4326)
+
+MaxRisk = dam %>% 
+  filter(HAZARD == "H", 
+         grepl("C", PURPOSES)) %>%
+  group_by(STATE) %>%
+  slice_max(NID_STORAGE) %>%
+  select("DAM_NAME", "NID_STORAGE", "YEAR_COMPLETED", "PURPOSES") %>% 
+  st_transform(4326)
+
+leaflet() %>% 
+  addProviderTiles(providers$CartoDB) %>% 
+  addPolylines(data = MSSP) %>% 
+  addCircleMarkers(data = MaxRisk, 
+                   fillOpacity = .5, 
+                   radius = ~NID_STORAGE/1500000, 
+                   color = "red", 
+                   stroke = FALSE,  
+                   popup = leafpop::popupTable(st_drop_geometry(MaxRisk), 
+                           feature.id = FALSE, 
+                           row.number = FALSE))
+```
